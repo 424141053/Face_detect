@@ -7,16 +7,6 @@ from PyQt5.QtWidgets import QMainWindow, QLabel, QVBoxLayout, QHBoxLayout, QWidg
 from PyQt5.QtGui import QImage, QPixmap
 from datetime import datetime
 
-import cv2
-import numpy as np
-import os
-import face_recognition
-from PyQt5.QtCore import QThread, pyqtSignal, Qt, QTimer
-from PyQt5.QtWidgets import QMainWindow, QLabel, QVBoxLayout, QHBoxLayout, QWidget
-from PyQt5.QtGui import QImage, QPixmap
-from datetime import datetime
-
-
 # 人脸识别类
 class FaceRecognizer:
     def __init__(self, known_faces_dir=r"C:\Users\baby\Desktop\大实验\face\known_faces", tolerance=0.45):

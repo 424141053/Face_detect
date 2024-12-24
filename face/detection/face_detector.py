@@ -1,41 +1,68 @@
 import cv2
-from ultralytics import YOLO
 import numpy as np
+import os
+import face_recognition
+from datetime import datetime
 
-class FaceDetector:
-    def __init__(self):
-        # 加载YOLOv11模型（假设你使用的是YOLOv11的best.pt文件）
-        self.yolo_model = YOLO(r"C:\Users\baby\runs\detect\train3\weights\best.pt")
-        self.class_names = self.yolo_model.names  # 获取类别名称
+# 人脸识别类
+class FaceRecognizer:
+    def __init__(self, known_faces_dir=r"C:\Users\baby\Desktop\大实验\face\known_faces", tolerance=0.45):
+        self.known_face_encodings = []
+        self.known_face_names = []
+        self.known_face_images = []
+        self.tolerance = tolerance
+        self.load_known_faces(known_faces_dir)
+        self.recognized_name = None
+        self.recognized_image = None
+        self.recognized_info = None
 
-    def detect_faces(self, frame):
-        # YOLO模型推理
-        # 将BGR图像转换为RGB
+    def load_known_faces(self, known_faces_dir):
+        if not os.path.exists(known_faces_dir):
+            os.makedirs(known_faces_dir)
+
+        for filename in os.listdir(known_faces_dir):
+            if filename.endswith(".jpg") or filename.endswith(".png"):
+                name = os.path.splitext(filename)[0]
+                filepath = os.path.join(known_faces_dir, filename)
+
+                image = face_recognition.load_image_file(filepath)
+                encoding = face_recognition.face_encodings(image)
+                if encoding:
+                    self.known_face_encodings.append(encoding[0])
+                    self.known_face_names.append(name)
+                    self.known_face_images.append(filepath)  # 保存图片路径
+                else:
+                    print(f"无法识别 {filename} 中的人脸。")
+
+    def recognize_faces(self, frame):
+        # 将帧从 BGR 转换为 RGB
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = self.yolo_model.predict(rgb_frame, conf=0.01, augment=False)
 
-        # 解析结果
-        boxes = results[0].boxes
-        xywh = boxes.xywh.numpy().astype(int)  # 获取坐标信息
-        cls = boxes.cls.numpy().astype(int)   # 获取类别信息
-        score = boxes.conf.numpy().astype(float)  # 获取置信度信息
+        # 在当前帧中检测人脸位置和特征
+        face_locations = face_recognition.face_locations(rgb_frame)
+        face_encodings = face_recognition.face_encodings(rgb_frame, face_locations)
 
-        # 绘制矩形框和标签
-        for i in range(len(xywh)):
-            x_center, y_center, w, h = xywh[i]
-            x1 = int(x_center - w / 2)
-            y1 = int(y_center - h / 2)
-            x2 = int(x_center + w / 2)
-            y2 = int(y_center + h / 2)
+        recognized_name = None
+        recognized_image = None
 
-            # 绘制边界框
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        for (top, right, bottom, left), face_encoding in zip(face_locations, face_encodings):
+            matches = face_recognition.compare_faces(self.known_face_encodings, face_encoding, tolerance=self.tolerance)
+            face_distances = face_recognition.face_distance(self.known_face_encodings, face_encoding)
+            name = "未知"
+            recognized_name = None
 
-            # 获取类别名称
-            label = self.class_names[cls[i]]
+            if matches:
+                best_match_index = np.argmin(face_distances)
+                if matches[best_match_index]:
+                    name = self.known_face_names[best_match_index]
+                    recognized_name = name
+                    recognized_image = self.known_face_images[best_match_index]  # 获取已知人脸图像路径
+                else:
+                    recognized_name = "unknow"
+                    recognized_image = r"face\unknow_face\unknow_face.png" 
 
-            # 绘制类别名称和置信度
-            text = f"{label} {score[i]:.2f}"
-            cv2.putText(frame, text, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+            # 在画面中标记人脸
+            cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
+            cv2.putText(frame, name, (left, top - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
-        return frame
+        return frame, recognized_name, recognized_image
